@@ -21,15 +21,32 @@ alias cp='cp -v'
 alias mv='mv -v'
 # 清屏
 alias cr='clear'
-
+# 过滤
+alias grep='grep --color'
 
 alias no-history='unset HISTORY HISTFILE HISTSAVE HISTZONE HISTORY HISTLOG; export HISTFILE=/dev/null; export HISTSIZE=0; export HISTFILESIZE=0'
+
+### 备份相关
+dot_load(){
+    zsh -c 'cd ~/dotfiles && make install'
+}
+
+dot_save(){
+    zsh -c 'cd ~/dotfiles && make'
+}
+
+alias dot_edit='vim ~/dotfiles/makefile'
 
 bak(){
     cp $1  $1`date +%Y-%m-%d_%H:%M`.bak
 }
 
+### 代理相关
 with_proxy(){
     env http_proxy=$HTTP_PROXY https_proxy=$HTTP_PROXY zsh -c "$*"
 }
 
+export_proxy(){
+    export http_proxy=$HTTP_PROXY
+    export https_proxy=$HTTP_PROXY
+}

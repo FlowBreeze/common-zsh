@@ -1,0 +1,155 @@
+#!/usr/bin/env zunit
+@setup {
+    rm -rf temp
+    mkdir -p -- temp/parent/stow
+    export FB_STOW_HOME=$(readlink -f temp/parent/stow)
+    load ../common.zsh
+    work_dir=$(pwd)
+    cd temp/parent
+
+    create_files(){
+        mkdir empty_folder
+        mkdir folder
+        echo 1 >> file_out_folder
+        echo 2 >> folder/file_in
+        mkdir big_folder
+        echo 3 >> big_folder/file1
+        echo 4 >> big_folder/file2
+        echo 5 >> big_folder/file3
+        mkdir big_folder/folder_in
+        echo 6 >> big_folder/folder_in/file4
+        ln -s folder/file_in link
+    }
+    add_to_sync(){(
+        set -e
+        sync_add file_out_folder
+        sync_add folder
+        sync_add big_folder/file1
+        sync_add big_folder/file2
+        sync_add link
+        sync_add empty_folder
+    )}
+}
+
+@teardown {
+    cd $work_dir && rm -rf temp
+    unset FB_STOW_HOME
+}
+
+@test 'quick add should executed' {
+    create_files
+    add_to_sync
+
+    assert $state equals 0
+    assert $(<file_out_folder) same_as 1
+    assert $(realpath -s file_out_folder) is_link
+    assert $(<folder/file_in) same_as 2
+    assert $(realpath -s folder) is_link
+    assert $(realpath -s folder/file_in) is_file
+    assert $(<big_folder/file1) same_as 3
+    assert $(realpath -s big_folder/file1) is_link
+    assert $(<big_folder/file2) same_as 4
+    assert $(realpath -s big_folder/file2) is_link
+    assert $(<big_folder/file3) same_as 5
+    assert $(realpath -s big_folder/file3) is_file
+    assert $(<big_folder/folder_in/file4) same_as 6
+    assert $(realpath -s big_folder/folder_in) is_dir
+    assert $(realpath -s big_folder/folder_in/file4) is_file
+    assert $(<link) same_as 2
+    assert $(realpath -s link) is_link
+}
+
+@test 'remove should faild' {
+    create_files
+
+    run sync_remove file_not_exit
+    assert $state equals 1
+    assert $output same_as 'file file_not_exit not exits'
+
+    run sync_remove file_out_folder
+    assert $state equals 1
+}
+
+@test 'remove file' {
+    create_files
+    add_to_sync
+
+    file=$(realpath -s file_out_folder)
+    assert $file is_link
+    assert $(<$file) same_as 1
+
+    run sync_remove file_out_folder
+    assert $state equals 0
+    assert $file is_file
+    assert $(<$file) same_as 1
+}
+
+@test 'remove folder' {
+    create_files
+    add_to_sync
+
+    file=$(realpath -s folder/file_in)
+    assert $file is_file
+    assert $(realpath -s folder) is_link
+    assert $(<$file) same_as 2
+
+    run sync_remove folder
+    assert $state equals 0
+    assert $file is_file
+    assert $(realpath -s folder) is_dir
+    assert $(<$file) same_as 2
+}
+
+@test 'remove folder should not permitted' {
+    create_files
+
+    remove=$FB_STOW_REMOVE_FOLDER
+    touch $remove
+    run sync_add $remove
+    assert $state equals 1
+    run sync_add $remove other
+    assert $state equals 1
+
+    rm -rf $remove
+    mkdir -p $remove
+    touch $remove/file
+    run sync_add $remove
+    assert $state equals 1
+    run sync_add $remove other
+    assert $state equals 1
+    run sync_add $remove/file
+    assert $state equals 1
+    run sync_add $remove/file other
+    assert $state equals 1
+
+    add_to_sync
+
+    run sync_remove file_out_folder
+    run sync_remove folder
+
+    run sync_remove $remove
+    assert $state equals 1
+    run sync_remove $remove other
+    assert $state equals 1
+    run sync_remove $remove/file
+    assert $state equals 1
+    run sync_remove $remove/file other
+    assert $state equals 1
+}
+
+@test 'remove file in folder' {
+    create_files
+    add_to_sync
+
+    folder=$(realpath -s folder)
+    file=$(realpath -s folder/file_in)
+    assert $folder is_link
+    assert $file is_file
+    assert $(<$file) same_as 2
+
+    run sync_remove file_out_folder
+    assert $state equals 0
+    assert $folder is_dir
+    assert $file is_file
+    assert $(<$file) same_as 2
+}

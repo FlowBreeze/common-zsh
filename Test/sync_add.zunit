@@ -1,0 +1,333 @@
+#!/usr/bin/env zunit
+@setup {
+    mkdir -p -- temp/parent/stow
+    export FB_STOW_HOME=$(readlink -f temp/parent/stow)
+    load ../common.zsh
+    work_dir=$(pwd)
+    cd temp/parent
+
+    create_files(){
+        mkdir empty_folder
+        mkdir folder
+        echo 1 >> file_out_folder
+        echo 2 >> folder/file_in
+        mkdir big_folder
+        echo 3 >> big_folder/file1
+        echo 4 >> big_folder/file2
+        echo 5 >> big_folder/file3
+        mkdir big_folder/folder_in
+        echo 6 >> big_folder/folder_in/file4
+        ln -s folder/file_in link
+    }
+}
+
+@teardown {
+    cd $work_dir && rm -rf temp
+    unset FB_STOW_HOME
+}
+
+@test 'environment varibles should set' {
+    assert $FB_STOW_DEFAULT_PKG same_as 'default'
+    assert $FB_STOW_REMOVE_FOLDER same_as '.remove'
+}
+
+@test 'add should faild' {
+    run sync_add file_not_exit
+    assert $state equals 1
+    assert $output same_as 'file file_not_exit not exits'
+
+    cd ..
+
+    run sync_add file_not_in_parent
+    assert $state equals 1
+    assert $output same_as 'file file_not_in_parent not exits'
+
+    touch file_not_in_parent
+    run sync_add file_not_in_parent
+    assert $state equals 1
+    assert $output contains 'file file_not_in_parent not in '
+
+    cd parent
+}
+
+@test 'add file' {
+    create_files
+
+    file=$(readlink -f file_out_folder)
+    assert $file is_file
+
+    run sync_add file_out_folder
+    assert $state equals 0
+    assert $(<$file) same_as 1
+    assert $file is_link
+    file=$(readlink -f file_out_folder)
+    assert $file same_as $FB_STOW_HOME/default/file_out_folder
+}
+
+@test 'relative path' {
+    assert $state equals 0
+    run relative_path . .
+    assert $state equals 0
+    run relative_path . ..
+    assert $state equals 0
+    run relative_path . ../..
+    assert $state equals 0
+    run relative_path . ../../..
+    assert $state equals 0
+    run relative_path . ../../.././.
+    assert $state equals 0
+    run relative_path . $(readlink -f .)
+    assert $state equals 0
+    run relative_path . $(readlink -f ..)
+    assert $state equals 0
+    run relative_path . $(readlink -f ../..)
+    assert $state equals 0
+    run relative_path . $(readlink -f ../../..)
+    assert $state equals 0
+    run relative_path . $(readlink -f ../../.././.)
+    assert $state equals 0
+    run relative_path .. .
+    assert $state equals 0
+    run relative_path ../.. .
+    assert $state equals 0
+    run relative_path .././.. .
+    assert $state equals 0
+    mkdir a b
+    run relative_path a ../../..
+    assert $state equals 0
+    run relative_path ../../.. b
+    assert $state equals 0
+    run relative_path a b
+    assert $state equals 0
+    run relative_path a /root
+}
+
+@test 'add link' {
+    create_files
+
+    link=$(realpath -s link)
+    assert $link is_link
+    assert $(<$link) same_as 2
+
+    run sync_add $link
+    assert $state equals 0
+    assert $(<$link) same_as 2
+    assert $link is_link
+}
+
+@test 'add link before file' {
+    create_files
+
+    link=$(realpath -s link)
+    assert $link is_link
+    assert $(<$link) same_as 2
+
+    run sync_add $link
+    assert $state equals 0
+    assert $(<$link) same_as 2
+    assert $link is_link
+
+    file=$(readlink -f folder)
+    run sync_add folder
+    assert $file is_link
+    assert $file/file_in is_file
+
+    ls -la stow/default
+}
+
+@test 'add link after file' {
+    create_files
+
+    link=$(realpath -s link)
+    assert $link is_link
+    assert $(<$link) same_as 2
+
+    file=$(readlink -f folder)
+    run sync_add folder
+    assert $file is_link
+    assert $file/file_in is_file
+
+    run sync_add $link
+    assert $state equals 0
+    cd stow/default
+    cd ../../folder
+    assert $(<$link) same_as 2
+    assert $link is_link
+}
+
+@test 'add file to other package' {
+    create_files
+
+    file=$(readlink -f file_out_folder)
+    assert $file is_file
+
+    run sync_add file_out_folder other
+    assert $state equals 0
+    assert $(<$file) same_as 1
+    assert $file is_link
+    file=$(readlink -f file_out_folder)
+    assert $file same_as $FB_STOW_HOME/other/file_out_folder
+}
+
+@test 'repeat add file should fail' {
+    create_files
+
+    file=$(readlink -f file_out_folder)
+    run sync_add file_out_folder
+    assert $state equals 0
+
+    run sync_add file_out_folder
+    file_in_stow=$(readlink -f file_out_folder)
+    assert $state equals 1
+    assert $file is_link
+    assert $file_in_stow same_as $FB_STOW_HOME/default/file_out_folder
+
+    run sync_add file_out_folder other
+    assert $state equals 1
+    assert $file is_link
+    assert $file_in_stow same_as $FB_STOW_HOME/default/file_out_folder
+}
+
+@test 'add folder' {
+    create_files
+
+    file=$(readlink -f empty_folder)
+    assert $file is_dir
+
+    run sync_add $file
+    assert $state equals 0
+    assert $file is_link
+    file=$(readlink -f empty_folder)
+    assert $file same_as $FB_STOW_HOME/default/empty_folder
+}
+
+@test 'add folder to other package' {
+    create_files
+
+    file=$(readlink -f folder/file_in)
+    folder=$(readlink -f folder)
+    assert $file is_file
+
+    run sync_add folder/file_in current
+    assert $state equals 0
+    assert $(<$file) same_as 2
+    assert $file is_link
+
+    run sync_add folder other
+    assert $state equals 1
+    assert $(<$folder/file_in) same_as 2
+    assert $(<$file) same_as 2
+    assert $file is_link
+    assert $folder is_dir
+
+    file=$(readlink -f folder/file_in)
+    assert $file same_as $FB_STOW_HOME/current/folder/file_in
+}
+
+@test 'repeat add folder should fail' {
+    create_files
+
+    file=$(readlink -f folder)
+    run sync_add folder
+    assert $state equals 0
+
+    run sync_add folder
+    assert $state equals 1
+    assert $file is_link
+    file=$(readlink -f folder)
+    assert $file same_as $FB_STOW_HOME/default/folder
+}
+
+@test 'add folder with file' {
+    create_files
+
+    file=$(readlink -f folder)
+    assert $file is_dir
+    assert $file/file_in is_file
+
+    run sync_add folder
+    assert $state equals 0
+    assert $file is_link
+    assert $file/file_in is_file
+    assert $(<$file/file_in) same_as 2
+}
+
+@test 'add parent folder' {
+    create_files
+
+    file1=$(readlink -f big_folder/file1)
+    assert $file1 is_file
+
+    run sync_add big_folder/file1
+    assert $state equals 0
+    assert $file1 is_link
+    assert $(<$file1) same_as 3
+
+    file2=$(readlink -f big_folder/file2)
+    assert $file2 is_file
+
+    run sync_add $file2
+    assert $state equals 0
+    assert $file2 is_link
+    assert $(<$file2) same_as 4
+
+    parent=$(readlink -f big_folder)
+    assert $parent is_dir
+
+    run sync_add $parent
+    assert $state equals 0
+    assert $parent is_link
+    assert $file1 is_file
+    assert $file2 is_file
+    assert $(readlink -f big_folder/file3) is_file
+}
+
+@test 'top down add' {
+    create_files
+
+    big_folder=$(readlink -f big_folder)
+    run sync_add big_folder
+    assert $state equals 0
+    assert $big_folder is_link
+    assert $(readlink -f big_folder) is_dir
+
+    run sync_add big_folder/file1
+    assert $state equals 1
+
+    run sync_add big_folder/file2
+    assert $state equals 1
+
+    run sync_add big_folder/folder_in
+    assert $state equals 1
+
+    run sync_add big_folder/folder_in/file4
+    assert $state equals 1
+}
+
+@test 'buttom up add' {
+    create_files
+    run sync_add big_folder/folder_in/file4
+    assert $state equals 0
+    assert $(realpath -s big_folder/folder_in/file4) is_link
+
+    run sync_add big_folder/folder_in
+    assert $state equals 0
+    assert $(realpath -s big_folder/folder_in) is_link
+    assert $(realpath -s big_folder/folder_in/file4) is_file
+
+    run sync_add big_folder/file1
+    assert $state equals 0
+    assert $(realpath -s big_folder/file1) is_link
+
+    run sync_add big_folder/file2
+    assert $state equals 0
+    assert $(realpath -s big_folder/file2) is_link
+
+    run sync_add big_folder
+    assert $state equals 0
+    assert $(realpath -s big_folder) is_link
+    assert $(realpath -s big_folder/file1) is_file
+    assert $(realpath -s big_folder/file2) is_file
+    assert $(realpath -s big_folder/folder_in) is_dir
+    assert $(realpath -s big_folder/folder_in/file4) is_file
+}

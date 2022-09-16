@@ -1,5 +1,5 @@
 ### 基础函数
-new_file(){
+mkfile(){
     local file
     for file {
         mkdir -p -- "${file:h}" && true >> "$file" || return $?
@@ -8,7 +8,11 @@ new_file(){
 }
 
 bak() {
-  cp "$1" "$1$(date +%Y-%m-%d_%H:%M).bak"
+    cp "$1" "$1$(date +%Y-%m-%d_%H:%M).bak"
+}
+
+cdtemp () {
+    cd $(mktemp -d)
 }
 
 no_history() {

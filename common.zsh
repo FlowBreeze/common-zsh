@@ -7,8 +7,13 @@ mkfile(){
     return 0
 }
 
+# always follow symbolic links in SOURCE
 bak() {
-    cp "$1" "$1$(date +%Y-%m-%d_%H:%M).bak"
+    if [[ -d $1 ]] {
+      cp -rL "$1" "$1$(date +%Y-%m-%d_%H:%M).bak"
+    } else {
+      cp -r "$1" "$1$(date +%Y-%m-%d_%H:%M).bak"
+    }
 }
 
 cdtemp () {

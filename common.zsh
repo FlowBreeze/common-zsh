@@ -22,6 +22,15 @@ no_history() {
     export HISTFILESIZE=0
 }
 
+repeat_until(){
+    echo "Start trying [#]$*"
+    until $*
+    do
+       sleep 1
+       echo "Trying again [#]$*"
+    done
+}
+
 ### 代理相关
 if ((${+FB_HTTP_PROXY})){
     with_proxy(){

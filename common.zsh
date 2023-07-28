@@ -53,5 +53,7 @@ if ((${+FB_HTTP_PROXY})){
         export HTTP_PROXY=$FB_HTTP_PROXY
         export HTTPS_PROXY=$FB_HTTP_PROXY
     }
+
+    compdef _precommand with_proxy
 }
 

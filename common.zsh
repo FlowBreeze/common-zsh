@@ -8,7 +8,7 @@ mkfile(){
 }
 
 # always follow symbolic links in SOURCE
-bak() {
+bak(){
     if [[ -d $1 ]] {
       cp -rL "$1" "$1$(date +%Y-%m-%d_%H:%M).bak"
     } else {
@@ -16,11 +16,11 @@ bak() {
     }
 }
 
-cdtemp () {
+cdtemp(){
     cd $(mktemp -d)
 }
 
-no_history() {
+no_history(){
     unset HISTORY HISTFILE HISTSAVE HISTZONE HISTORY HISTLOG
     export HISTFILE=/dev/null
     export HISTSIZE=0
@@ -57,3 +57,30 @@ if ((${+FB_HTTP_PROXY})){
     compdef _precommand with_proxy
 }
 
+
+### ui 相关
+if ((${+DISPLAY})){
+  if ((${+FB_READUI_CMD})) then
+    : # skip
+  elif type rofi > /dev/null; then
+    FB_READUI_CMD=rofi
+  elif type zenity > /dev/null; then
+    FB_READUI_CMD=zenity
+  else
+    FB_READUI_CMD=read
+  fi
+
+
+  readui(){
+    local read_cmd=$FB_READUI_CMD
+    if [[ "$read_cmd" == "rofi" ]]; then
+      rofi -dmenu -theme-str 'listview { enabled: false;}' $@
+    elif [[ "$read_cmd" == "zenity" ]]; then
+      zenity --entry $@
+    elif [[ "$read_cmd" == "read" ]]; then
+      read
+    fi
+  }
+
+  [[ -n ${_comps[$FB_READUI_CMD]} ]] && compdef readui=${FB_READUI_CMD}
+}
